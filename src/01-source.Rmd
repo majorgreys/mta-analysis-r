@@ -1,0 +1,44 @@
+---
+title: "Source data"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(purrr)
+library(lubridate)
+library(curl)
+```
+
+# Historical Subway Time Data
+
+The MTA provides [historical daily data](http://web.mta.info/developers/MTA-Subway-Time-historical-data.html) going back to September 17, 2014. The data is stored as protobuff following the General Transit Feed Specification (GTFS) [specification](https://developers.google.com/transit/gtfs-realtime/gtfs-realtime-proto). The files are stored on AWS S3 buckets, either rolled up for the full day or by 5 minute incremenents. The links to the daily files are created using the template `datamine-YEAR-MONTH-DAY.s3.amazonaws.com/{gtfs,gtfsl}.tgz` with `gtfs` covering the 1,2,3,4,5,6 lines and `gtfsl` for the L line. 
+
+Unfortunately, the historical data does not continue up to the present. There is a [discussion](https://groups.google.com/forum/#!searchin/mtadeveloperresources/historical$20data%7Csort:date/mtadeveloperresources/Fs6v6yzTj9Q/kcCJO7RkCAAJ) on the mtadeveloperresources Google Group that does not indicate any fixes on the immediate horizon.
+
+As a workaround, a team at [TransitCenter](http://transitcenter.org/) has used the MTA's realtime data feed to [archive data](http://data.mytransit.nyc/subway_time/) from Jan 31 2016 till May 31 2017. This work was done as part of a project on bus data, the source code for which available on [Bus-Data-NYC/mta-bus-archive](https://github.com/Bus-Data-NYC/mta-bus-archive). The urls are created using the template `/$YEAR/$YEAR-$DAY/subway_time_$YEAR$MONTH$DAY.tar.xz`.
+
+```{r}
+links <- 
+  seq(ymd('2016-01-31'),
+      ymd('2017-05-31'),
+      by='days') %>%
+  as.tibble() %>%
+  mutate(
+    url = sprintf('http://data.mytransit.nyc/subway_time/%4d/%4d-%02d/subway_time_%4d%02d%02d.tar.xz',
+                  year(value),
+                  year(value),
+                  month(value),
+                  year(value),
+                  month(value),
+                  day(value))
+  ) %>%
+  select(url) %>% 
+  flatten_chr
+dir <- tempdir()
+downloaded <-
+  links %>%
+  map(function(u) curl_download(u, file.path(dir, basename(u)))) %>%
+  flatten_chr()
+```
+
